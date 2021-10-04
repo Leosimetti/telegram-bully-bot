@@ -21,8 +21,7 @@ def with_logs(chat_id: str, logs=None) -> List[str]:
 
 def sanitize(msg: str) -> str:
     return (
-        msg.lower()
-        .strip()
+        msg.strip()
         .replace("скажи жопа", "жопа")
         .replace("пидрида", "пидрила")
         .replace("или мойся", "иди мойся")
