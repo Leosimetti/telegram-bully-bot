@@ -40,9 +40,22 @@ def valid(msg: str) -> bool:
     )
 
 
-def clean_chat_data(chat_id) -> List[str]:
-    lines: List[str] = list(filter(valid, map(sanitize, with_logs(chat_id))))
+def clean_chat_data(chat_id, logs: List[TextIO] = None) -> List[str]:
+    lines: List[str] = list(
+        filter(valid, map(sanitize, with_logs(chat_id, logs)))
+    )
     lines_no_dup: List[str] = list(dict.fromkeys(lines))
     logging.debug("Before:", len(lines))
     logging.debug("After:", len(lines_no_dup))
     return lines_no_dup
+
+
+if __name__ == "__main__":
+    chat_id = "-1001390493223"
+    logging.basicConfig(level=logging.DEBUG)
+
+    logs = [open(f"Logs/part{i}.log") for i in range(1, 7)]
+    result = clean_chat_data(chat_id, logs)
+
+    with open(f"{chat_id}_clean.txt", "w") as f:
+        f.write("\n".join(result))

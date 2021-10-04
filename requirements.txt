@@ -1,2 +1,2 @@
 aiogram
-mc.py
+markovify
