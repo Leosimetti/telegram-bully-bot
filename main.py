@@ -30,10 +30,9 @@ def generate_message(chat_id: str) -> str:
 
         generator: markovify.NewlineText = markovify.NewlineText(samples)
 
-        while (
-            sentence := generator.make_sentence(tries=100, min_words=1)
-        ) is None:
-            pass
+        sentence: str = generator.make_sentence(
+            tries=1000, min_words=1, test_output=random.random() < 0.8
+        )
 
         # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
         return sentence
