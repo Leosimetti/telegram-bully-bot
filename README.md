@@ -6,7 +6,7 @@
 pip install -r requirements.txt
 ```
 
-## Starting the bot 
+## Starting the bot
 ```shell
 export BULLY_BOT_TOKEN= *your_token*
 python main.py

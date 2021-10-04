@@ -1,54 +1,48 @@
+import logging
 import re
 from itertools import chain
+from typing import List, TextIO
+
+logging.basicConfig(level=logging.INFO)
 
 
-def with_logs() -> list:
-    def read_file_then_close(file):
+def with_logs(chat_id: str, logs=None) -> List[str]:
+    if logs is None:
+        logs = []
+
+    def read_file_then_close(file: TextIO) -> List[str]:
         content = file.readlines()
         file.close()
         return content
 
-    files = [open(f"part{i}.log", "r", encoding="utf8") for i in range(1, 7)] + [open("-1001390493223.txt", "r")]
-    files = map(read_file_then_close, files)
-    return list(chain.from_iterable(files))
+    files: List[TextIO] = logs + [open(f"{chat_id}.txt", "r")]
+    return list(chain.from_iterable(map(read_file_then_close, files)))
 
 
-def clean_msg(msg: str) -> str:
+def sanitize(msg: str) -> str:
     return (
-        msg.lower().strip()
-            .replace("скажи жопа", "жопа")
-            .replace("пидрида", "пидрила")
-            .replace("или мойся", "иди мойся")
+        msg.strip()
+        .replace("скажи жопа", "жопа")
+        .replace("пидрида", "пидрила")
+        .replace("или мойся", "иди мойся")
+        .replace("хуй", "x*й")
     )
 
 
-def filter_msg(msg: str) -> bool:
-    pings = re.compile(r"@[a-z0-9_]+", re.IGNORECASE)
-    letters = re.compile(r"[a-zа-я0-9]", re.IGNORECASE)
+def valid(msg: str) -> bool:
+    pings: re.Pattern = re.compile(r"@[a-z0-9_]+", re.IGNORECASE)
+    letters: re.Pattern = re.compile(r"\w", re.IGNORECASE)
     return (
-            len(letters.findall(msg)) > 1 and
-            len(msg) > 0 and
-            len(pings.findall(msg)) == 0
+        len(letters.findall(msg)) > 0
+        and 0 < len(msg) <= 500
+        and len(pings.findall(msg)) == 0
+        and not msg.startswith("/")
     )
 
 
-def clean():
-    lines = list(
-        filter(
-            filter_msg,
-            map(
-                clean_msg,
-                with_logs()
-            )
-        )
-    )
-    lines_no_dup = list(dict.fromkeys(lines))
-    print(lines_no_dup)
-    print("Before:", len(lines))
-    print("After:", len(lines_no_dup))
+def clean_chat_data(chat_id) -> List[str]:
+    lines: List[str] = list(filter(valid, map(sanitize, with_logs(chat_id))))
+    lines_no_dup: List[str] = list(dict.fromkeys(lines))
+    logging.debug("Before:", len(lines))
+    logging.debug("After:", len(lines_no_dup))
     return lines_no_dup
-
-
-if __name__ == '__main__':
-    with open("-1001390493223_clean.txt", "w") as f:
-        f.write("\n".join(clean()) + "\n")
