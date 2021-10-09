@@ -1,7 +1,7 @@
 import logging
 import os
 import random
-from typing import Optional
+from typing import Optional, List
 
 import markovify
 from aiogram import Bot, Dispatcher, executor, types
