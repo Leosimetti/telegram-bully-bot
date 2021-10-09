@@ -34,7 +34,7 @@ def valid(msg: str) -> bool:
     letters: re.Pattern = re.compile(r"\w", re.IGNORECASE)
     return (
         len(letters.findall(msg)) > 0
-        and 0 < len(msg) <= 500
+        and 0 < len(msg) <= 5000
         and len(pings.findall(msg)) == 0
         and not msg.startswith("/")
     )
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     chat_id = "-1001390493223"
     logging.basicConfig(level=logging.DEBUG)
 
-    logs = [open(f"Logs/part{i}.log") for i in range(1, 7)]
+    logs = [open(f"Logs/logs{i}.log") for i in range(1, 2)]
     result = clean_chat_data(chat_id, logs)
 
     with open(f"{chat_id}_clean.txt", "w") as f:

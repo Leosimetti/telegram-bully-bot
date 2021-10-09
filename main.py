@@ -28,10 +28,12 @@ def generate_message(chat_id: str) -> str:
         else:
             samples = "\n".join(["бебра", "иди мойся", "воняешь", "попу мыл?"])
 
-        generator: markovify.NewlineText = markovify.NewlineText(samples)
+        generator: markovify.NewlineText = markovify.NewlineText(
+            samples, state_size=1
+        )
 
         sentence: str = generator.make_sentence(
-            tries=1000, min_words=1, test_output=random.random() < 0.8
+            tries=100, min_words=1, test_output=random.random() < 0.6
         )
 
         # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
@@ -65,7 +67,9 @@ async def gen(message: types.Message) -> None:
     chat_id = message.chat.id
 
     await bot.delete_message(chat_id, message.message_id)
-    await message.answer(generate_message(chat_id))
+    await message.answer(
+        generate_message(chat_id), disable_web_page_preview=True
+    )
 
 
 @dp.message_handler(commands=["info"])
@@ -92,7 +96,7 @@ async def sov(message: types.Message) -> None:
     is_reply_to_bot = is_reply.from_user.is_bot if is_reply else False
     if random.randint(0, 6) == 0 or is_reply_to_bot:
         random_text = generate_message(message.chat.id)
-        await message.reply(random_text)
+        await message.reply(random_text, disable_web_page_preview=True)
 
 
 if __name__ == "__main__":
