@@ -7,6 +7,8 @@ import markovify
 from aiogram import Bot, Dispatcher, executor, types
 
 import bloodbath
+import asyncio
+import aioschedule
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -17,8 +19,14 @@ bot: Bot = Bot(token=API_TOKEN)
 dp: Dispatcher = Dispatcher(bot)
 dir_to_txt: str = "Dialogs/"
 
+
 # MESSAGES
 # ID TEXT FREQUENCY
+
+
+async def startup(disp):
+    print(disp)
+    aioschedule.every().second.do(aboba)
 
 
 def generate_message(chat_id: str) -> str:
@@ -32,7 +40,7 @@ def generate_message(chat_id: str) -> str:
             else "\n".join(DEFAULT_DATASET)
         )
 
-        generator: markovify.NewlineText = markovify.NewlineText(
+        generator: markovify.NewlineText = markovify.NewilineText(
             samples, state_size=1
         )
 
@@ -111,7 +119,20 @@ async def sov(message: types.Message) -> None:
         await message.reply(random_text, disable_web_page_preview=True)
 
 
+def repeat(coro, loop):
+    asyncio.ensure_future(coro(), loop=loop)
+    loop.call_later(2, repeat, coro, loop)
+
+
 if __name__ == "__main__":
     if not os.path.exists("Dialogs/"):
         os.mkdir("Dialogs/")
-    executor.start_polling(dp, skip_updates=True)
+
+
+    async def aboba():
+        pass
+
+
+    loop = asyncio.get_event_loop()
+    loop.call_later(2, repeat, aboba, loop)
+    executor.start_polling(dp, skip_updates=True, loop=loop)

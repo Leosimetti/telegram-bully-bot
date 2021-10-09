@@ -1,2 +1,4 @@
 aiogram
 markovify
+asyncio
+aioschedule
