@@ -1,21 +1,24 @@
 import logging
 import os
 import random
-from typing import Optional
+from typing import Optional, List
 
 import markovify
 from aiogram import Bot, Dispatcher, executor, types
 
 import bloodbath
 
+logging.basicConfig(level=logging.DEBUG)
+
 API_TOKEN: Optional[str] = os.getenv("BULLY_BOT_TOKEN")
+DEFAULT_DATASET: List[str] = ["бебра", "иди мойся", "воняешь", "попу мыл?"]
 
-
-logging.basicConfig(level=logging.INFO)
 bot: Bot = Bot(token=API_TOKEN)
 dp: Dispatcher = Dispatcher(bot)
-
 dir_to_txt: str = "Dialogs/"
+
+# MESSAGES
+# ID TEXT FREQUENCY
 
 
 def generate_message(chat_id: str) -> str:
@@ -23,19 +26,14 @@ def generate_message(chat_id: str) -> str:
 
     with open(chat_path, encoding="utf8") as file:
         lines = file.read()
-        if len(lines.splitlines()) >= 4:
-            samples = lines
-        else:
-            samples = "\n".join(["бебра", "иди мойся", "воняешь", "попу мыл?"])
+        samples = (
+            lines
+            if lines.count("\n") >= 4
+            else "\n".join(DEFAULT_DATASET)
+        )
 
         generator: markovify.NewlineText = markovify.NewlineText(samples)
-
-        while (
-            sentence := generator.make_sentence(tries=100, min_words=1)
-        ) is None:
-            pass
-
-        # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
+        sentence: Optional[str] = generator.make_sentence(tries=100, min_words=1)
         return sentence
 
 
@@ -51,13 +49,19 @@ async def new_chat(message: types.Message) -> None:
 
 @dp.message_handler(commands=["start"], chat_type=types.ChatType.PRIVATE)
 async def start(message: types.Message) -> None:
-    await message.answer("Иди найхуй пидор.")
+    await message.answer("Иди нахуй пидор.")
 
 
 @dp.message_handler(commands=["help"])
 async def react(message: types.Message) -> None:
     await message.answer(
-        "Мои команды:\n/gen - сгенерировать фразу\n/info - данные о базе"
+        "\n".join(
+            (
+                "Мои команды:",
+                "/gen - сгенерировать фразу",
+                "/info - данные о базе",
+            )
+        )
     )
 
 
@@ -67,6 +71,7 @@ async def gen(message: types.Message) -> None:
 
     await bot.delete_message(chat_id, message.message_id)
     await message.answer(generate_message(chat_id))
+    # await message.answer("aboba")
 
 
 @dp.message_handler(commands=["info"])
@@ -74,16 +79,20 @@ async def info(message: types.Message) -> None:
     chat_path: str = f"{dir_to_txt}{message.chat.id}.txt"
     with open(chat_path, encoding="utf8") as f:
         text_count = len(f.readlines())
-
     await message.answer(
-        f"ID чата: {message.chat.id}\nсохранено {text_count} строк"
+        "\n".join(
+            (
+                f"ID чата: {message.chat.id}",
+                f"сохранено {text_count} строк"
+            )
+        )
     )
 
 
 @dp.message_handler(content_types=["text"])
 async def sov(message: types.Message) -> None:
     clean_message: str = bloodbath.sanitize(message.text)
-    chat_path = f"{dir_to_txt}{message.chat.id}.txt"
+    chat_path: str = f"{dir_to_txt}{message.chat.id}.txt"
 
     if bloodbath.valid(clean_message):
         with open(chat_path, "a", encoding="utf8") as f:
