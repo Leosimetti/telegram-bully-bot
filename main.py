@@ -9,8 +9,8 @@ from aiogram import Bot, Dispatcher, executor, types
 import bloodbath
 from datetime import datetime
 
+from aiogram.types.message import ContentType
 API_TOKEN: Optional[str] = os.getenv("BULLY_BOT_TOKEN")
-
 NEAREST_ANIME_DATE = datetime(year=2021, month=10, day=22, hour=20)
 ANIME_ROOM = 320
 
@@ -41,6 +41,16 @@ def generate_message(chat_id: str) -> str:
 
         # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
         return sentence
+
+def generate_sticker(chat_id: str) -> str:
+    chat_path: str = f"{dir_to_txt}{chat_id}_stickers.txt"
+
+    with open(chat_path, encoding="utf8") as file:
+        stickers = file.read().splitlines()
+        if len(stickers) <= 2:
+            stickers = ["CAACAgIAAxkBAAIHEmFpignJ7aloUf0eh_vekLFEUq2nAAIUAAP6U-sWktE_IbXY9aYhBA"]
+
+        return random.choice(stickers)
 
 async def get_time_to_anime(message, bypass=False):
     clean_message: str = bloodbath.sanitize(message.text)
@@ -107,12 +117,35 @@ async def info(message: types.Message) -> None:
     )
 
 
-@dp.message_handler(content_types=["text"])
 @dp.message_handler(commands=["kogda"])
 async def sxodka_time(message: types.message) -> None:
     chat_id = message.chat.id
     await bot.delete_message(chat_id, message.message_id)
     await get_time_to_anime(message, bypass=True)
+
+@dp.message_handler(commands=["sticker"])
+async def give_stick(message: types.message) -> None:
+    chat_id = message.chat.id
+    await bot.delete_message(chat_id, message.message_id)
+    await message.answer_sticker(generate_sticker(chat_id=chat_id))
+
+@dp.message_handler(content_types=ContentType.STICKER)
+async def send_stick(message: types.Message) -> None:
+    chat_path = f"{dir_to_txt}{message.chat.id}_stickers.txt"
+    file_id = message.sticker.file_id
+    with open(chat_path, "a", encoding="utf8") as f:
+        f.write(file_id + "\n")
+
+    is_reply = message.reply_to_message
+    is_reply_to_bot = is_reply.from_user.is_bot if is_reply else False
+    if random.randint(0, 2) == 0 or (is_reply_to_bot*random.randint(0,1)):
+        sticker = generate_sticker(chat_id=message.chat.id)
+        if is_reply_to_bot:
+            await message.reply_sticker(sticker)
+        else:
+            await message.answer_sticker(sticker)
+
+@dp.message_handler(content_types=ContentType.TEXT)
 async def sov(message: types.Message) -> None:
     clean_message: str = bloodbath.sanitize(message.text)
     chat_path = f"{dir_to_txt}{message.chat.id}.txt"
@@ -126,9 +159,14 @@ async def sov(message: types.Message) -> None:
 
     is_reply = message.reply_to_message
     is_reply_to_bot = is_reply.from_user.is_bot if is_reply else False
-    if random.randint(0, 6) == 0 or is_reply_to_bot:
-        random_text = generate_message(message.chat.id)
-        await message.reply(random_text, disable_web_page_preview=True)
+    if random.randint(0, 5) == 0 or (is_reply_to_bot * (random.randint(0,100) < 75)):
+
+        if random.randint(0,3) == 0:
+            random_stick = generate_sticker(message.chat.id)
+            await message.reply_sticker(random_stick)
+        else:
+            random_text = generate_message(message.chat.id)
+            await message.reply(random_text, disable_web_page_preview=True)
 
 
 if __name__ == "__main__":
