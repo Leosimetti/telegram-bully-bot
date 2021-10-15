@@ -7,9 +7,12 @@ import markovify
 from aiogram import Bot, Dispatcher, executor, types
 
 import bloodbath
+from datetime import datetime
 
 API_TOKEN: Optional[str] = os.getenv("BULLY_BOT_TOKEN")
 
+NEAREST_ANIME_DATE = datetime(year=2021, month=10, day=22, hour=20)
+ANIME_ROOM = 320
 
 logging.basicConfig(level=logging.INFO)
 bot: Bot = Bot(token=API_TOKEN)
@@ -39,6 +42,27 @@ def generate_message(chat_id: str) -> str:
         # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
         return sentence
 
+async def get_time_to_anime(message, bypass=False):
+    clean_message: str = bloodbath.sanitize(message.text)
+
+    time_words = ["когда", "через", "сколько", "when"]
+    anime_words = ["аниме", "онеме", "сходка", "сходочка", "anime"]
+    msg = clean_message.lower()
+
+    time_left = NEAREST_ANIME_DATE -  datetime.now()
+    if time_left.seconds > 0:
+        has_anime = any(word in msg for word in anime_words)
+        has_time = any(word in msg for word in time_words)
+        is_nice_message = has_anime and has_time
+        if is_nice_message or bypass:
+            
+            times =  time_left.days, time_left.seconds//3600, (time_left.seconds//60)%60, time_left.seconds % 60
+            proper_times = zip(times, ["дней", "часов", "минут", "секунд"])
+            answer = [f"{time[0]} {time[1]} " for time in proper_times if time[0] > 0]
+            await message.answer(f"До онеме сходОчки в {ANIME_ROOM} осталось {''.join(answer)}")
+    else:
+        await message.answer("Anime is no more...")
+    return is_nice_message
 
 @dp.message_handler(content_types=["new_chat_members"])
 async def new_chat(message: types.Message) -> None:
@@ -84,9 +108,17 @@ async def info(message: types.Message) -> None:
 
 
 @dp.message_handler(content_types=["text"])
+@dp.message_handler(commands=["kogda"])
+async def sxodka_time(message: types.message) -> None:
+    chat_id = message.chat.id
+    await bot.delete_message(chat_id, message.message_id)
+    await get_time_to_anime(message, bypass=True)
 async def sov(message: types.Message) -> None:
     clean_message: str = bloodbath.sanitize(message.text)
     chat_path = f"{dir_to_txt}{message.chat.id}.txt"
+
+    if await get_time_to_anime(message):
+        return
 
     if bloodbath.valid(clean_message):
         with open(chat_path, "a", encoding="utf8") as f:
