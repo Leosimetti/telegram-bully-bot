@@ -1,8 +1,11 @@
+import asyncio
 import logging
 import os
 import random
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
+from dataclasses import dataclass, field
+from time import time
 
 import markovify
 from aiogram import Bot, Dispatcher, executor, types
@@ -14,47 +17,110 @@ API_TOKEN: Optional[str] = os.getenv("BULLY_BOT_TOKEN")
 NEAREST_ANIME_DATE = datetime(year=2021, month=10, day=30, hour=19)
 ANIME_ROOM = 301
 
+MODEL_REFRESH_SEC = 30.
+EMPTY_MODEL_DELAY_SEC = 1.
+
+DEFAULT_SAMPLES = "\n".join(["бебра", "иди мойся", "воняешь", "попу мыл?"])
+DEFAULT_STICKERS = [
+    "CAACAgIAAxkBAAIHEmFpignJ7aloUf0eh"
+    "_vekLFEUq2nAAIUAAP6U-sWktE_IbXY9aYhBA"
+]
+
 logging.basicConfig(level=logging.INFO)
 bot: Bot = Bot(token=API_TOKEN)
 dp: Dispatcher = Dispatcher(bot)
 
 dir_to_txt: str = "Dialogs/"
 
+generators_lock = asyncio.Lock()
 
-def generate_message(chat_id: str) -> str:
+
+@dataclass
+class ModelInfo:
+    model: markovify.NewlineText
+    stickers: list[str]
+    created: float = field(default_factory=lambda: time())
+
+
+model_cache: dict[str, ModelInfo] = {}
+
+
+def refresh_generator(chat_id):
+    global model_cache
+    chat_id = str(chat_id)
+
     chat_path: str = f"{dir_to_txt}{chat_id}.txt"
 
-    with open(chat_path, encoding="utf8") as file:
-        lines = file.read()
-        if len(lines.splitlines()) >= 4:
-            samples = lines
-        else:
-            samples = "\n".join(["бебра", "иди мойся", "воняешь", "попу мыл?"])
+    if os.path.exists(chat_path):
+        with open(chat_path, encoding="utf8") as file:
+            lines = file.read()
+            if len(lines.splitlines()) >= 4:
+                samples = lines
+            else:
+                samples = DEFAULT_SAMPLES
+    else:
+        samples = DEFAULT_SAMPLES
 
-        generator: markovify.NewlineText = markovify.NewlineText(
-            samples, state_size=1
-        )
+    generator: markovify.NewlineText = markovify.NewlineText(
+        samples, state_size=1
+    )
+    generator.compile(inplace=True)
 
-        sentence: str = generator.make_sentence(
-            tries=100, min_words=1, test_output=random.random() < 0.6
-        )
-
-        # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
-        return sentence
-
-
-def generate_sticker(chat_id: str) -> str:
     chat_path: str = f"{dir_to_txt}{chat_id}_stickers.txt"
 
-    with open(chat_path, encoding="utf8") as file:
-        stickers = file.read().splitlines()
-        if len(stickers) <= 2:
-            stickers = [
-                "CAACAgIAAxkBAAIHEmFpignJ7aloUf0eh"
-                "_vekLFEUq2nAAIUAAP6U-sWktE_IbXY9aYhBA"
-            ]
+    if os.path.exists(chat_path):
+        with open(chat_path, encoding="utf8") as file:
+            stickers = file.read().splitlines()
+            if len(stickers) <= 2:
+                stickers = DEFAULT_STICKERS
+    else:
+        stickers = DEFAULT_STICKERS
 
-        return random.choice(stickers)
+    model_cache[chat_id] = ModelInfo(model=generator, stickers=stickers)
+
+async def get_cached_model(chat_id) -> ModelInfo:
+    chat_id = str(chat_id)
+    global model_cache
+    async with generators_lock:
+        if chat_id not in model_cache:
+            refresh_generator(chat_id)
+        return model_cache[chat_id]
+
+async def generators_refresh_task():
+    print("Starting cacher")
+    while True:
+        print("_before generators_lock")
+        async with generators_lock:
+            print("refreshing the chats...")
+            for chat_id in model_cache.keys():
+                refresh_generator(chat_id)
+
+        print("_after generators_lock")
+
+        await asyncio.sleep(MODEL_REFRESH_SEC)
+
+
+async def generate_message(chat_id: Union[str, int]) -> str:
+    global model_cache
+    generator = (await get_cached_model(chat_id)).model
+
+    while not (sentence := generator.make_sentence(
+        tries=100, min_words=1, test_output=random.random() < 0.6
+    )):
+        await asyncio.sleep(EMPTY_MODEL_DELAY_SEC)
+        async with generators_lock:
+            refresh_generator(chat_id)
+        generator = (await get_cached_model(chat_id)).model
+
+    # print("\n\n 🤡TEXT🤡 IS "+sentence+"\n\n")
+    return sentence
+
+
+async def generate_sticker(chat_id: Union[str, int]) -> str:
+    global model_cache
+    stickers = (await get_cached_model(chat_id)).stickers
+
+    return random.choice(stickers)
 
 
 async def get_time_to_anime(message, bypass=False):
@@ -122,7 +188,7 @@ async def gen(message: types.Message) -> None:
 
     await bot.delete_message(chat_id, message.message_id)
     await message.answer(
-        generate_message(chat_id), disable_web_page_preview=True
+        await generate_message(chat_id), disable_web_page_preview=True
     )
 
 
@@ -148,7 +214,7 @@ async def sxodka_time(message: types.message) -> None:
 async def give_stick(message: types.message) -> None:
     chat_id = message.chat.id
     await bot.delete_message(chat_id, message.message_id)
-    await message.answer_sticker(generate_sticker(chat_id=chat_id))
+    await message.answer_sticker(await generate_sticker(chat_id=chat_id))
 
 
 @dp.message_handler(content_types=ContentType.STICKER)
@@ -161,7 +227,7 @@ async def send_stick(message: types.Message) -> None:
     is_reply = message.reply_to_message
     is_reply_to_bot = is_reply.from_user.is_bot if is_reply else False
     if random.randint(0, 3) == 0 or (is_reply_to_bot * random.randint(0, 1)):
-        sticker = generate_sticker(chat_id=message.chat.id)
+        sticker = await generate_sticker(chat_id=message.chat.id)
         if is_reply_to_bot:
             await message.reply_sticker(sticker)
         else:
@@ -185,14 +251,18 @@ async def sov(message: types.Message) -> None:
     if random.randint(0, 5) == 0 or is_reply_to_bot:
 
         if random.randint(0, 4) == 0:
-            random_stick = generate_sticker(message.chat.id)
+            random_stick = await generate_sticker(message.chat.id)
             await message.reply_sticker(random_stick)
         else:
-            random_text = generate_message(message.chat.id)
+            random_text = await generate_message(message.chat.id)
             await message.reply(random_text, disable_web_page_preview=True)
 
 
 if __name__ == "__main__":
     if not os.path.exists("Dialogs/"):
         os.mkdir("Dialogs/")
-    executor.start_polling(dp, skip_updates=True)
+    loop = asyncio.get_event_loop()
+
+    cacher = loop.create_task(generators_refresh_task())
+
+    executor.start_polling(dp, skip_updates=True, loop=loop)
