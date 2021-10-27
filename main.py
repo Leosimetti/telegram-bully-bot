@@ -2,10 +2,10 @@ import asyncio
 import logging
 import os
 import random
-from datetime import datetime
-from typing import Optional, Union
 from dataclasses import dataclass, field
+from datetime import datetime
 from time import time
+from typing import Optional, Union
 
 import markovify
 from aiogram import Bot, Dispatcher, executor, types
@@ -17,14 +17,13 @@ API_TOKEN: Optional[str] = os.getenv("BULLY_BOT_TOKEN")
 NEAREST_ANIME_DATE = datetime(year=2021, month=10, day=30, hour=19)
 ANIME_ROOM = 301
 
-MODEL_REFRESH_SEC = 30.
-EMPTY_MODEL_DELAY_SEC = 1.
+MODEL_REFRESH_SEC = 30.0
+EMPTY_MODEL_DELAY_SEC = 1.0
 MAX_CACHE_AGE_SEC = 60 * 60  # 1 hour
 
 DEFAULT_SAMPLES = "\n".join(["бебра", "иди мойся", "воняешь", "попу мыл?"])
 DEFAULT_STICKERS = [
-    "CAACAgIAAxkBAAIHEmFpignJ7aloUf0eh"
-    "_vekLFEUq2nAAIUAAP6U-sWktE_IbXY9aYhBA"
+    "CAACAgIAAxkBAAIHEmFpignJ7aloUf0eh" "_vekLFEUq2nAAIUAAP6U-sWktE_IbXY9aYhBA"
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -80,6 +79,7 @@ def refresh_generator(chat_id):
 
     model_cache[chat_id] = ModelInfo(model=generator, stickers=stickers)
 
+
 async def get_cached_model(chat_id) -> ModelInfo:
     chat_id = str(chat_id)
     global model_cache
@@ -87,6 +87,7 @@ async def get_cached_model(chat_id) -> ModelInfo:
         if chat_id not in model_cache:
             refresh_generator(chat_id)
         return model_cache[chat_id]
+
 
 async def generators_refresh_task():
     global model_cache
@@ -96,7 +97,7 @@ async def generators_refresh_task():
     while True:
         # print("_before generators_lock")
         async with generators_lock:
-            print("refreshing the chats...")
+
             for chat_id in list(model_cache.keys()):
                 m = model_cache[chat_id]
                 if m.created < t:
@@ -104,7 +105,10 @@ async def generators_refresh_task():
                     continue
 
                 if m.has_new_msgs:
+                    print("refreshing the chats...")
                     refresh_generator(chat_id)
+
+        # refresh_generator(chat_id)
 
         # print("_after generators_lock")
 
@@ -115,9 +119,11 @@ async def generate_message(chat_id: Union[str, int]) -> str:
     global model_cache
     generator = (await get_cached_model(chat_id)).model
 
-    while not (sentence := generator.make_sentence(
-        tries=100, min_words=1, test_output=random.random() < 0.6
-    )):
+    while not (
+        sentence := generator.make_sentence(
+            tries=100, min_words=1, test_output=random.random() < 0.6
+        )
+    ):
         await asyncio.sleep(EMPTY_MODEL_DELAY_SEC)
         async with generators_lock:
             refresh_generator(chat_id)
@@ -230,8 +236,9 @@ async def give_stick(message: types.message) -> None:
 
 async def allow_model_update(chat_id):
     async with generators_lock:
-        if (model := model_cache.get(str(chat_id))):
+        if model := model_cache.get(str(chat_id)):
             model.has_new_msgs = True
+
 
 @dp.message_handler(content_types=ContentType.STICKER)
 async def send_stick(message: types.Message) -> None:
