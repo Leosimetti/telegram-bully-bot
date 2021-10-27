@@ -19,6 +19,7 @@ ANIME_ROOM = 301
 
 MODEL_REFRESH_SEC = 30.
 EMPTY_MODEL_DELAY_SEC = 1.
+MAX_CACHE_AGE_SEC = 60 * 60  # 1 hour
 
 DEFAULT_SAMPLES = "\n".join(["бебра", "иди мойся", "воняешь", "попу мыл?"])
 DEFAULT_STICKERS = [
@@ -40,6 +41,7 @@ class ModelInfo:
     model: markovify.NewlineText
     stickers: list[str]
     created: float = field(default_factory=lambda: time())
+    has_new_msgs = False
 
 
 model_cache: dict[str, ModelInfo] = {}
@@ -87,15 +89,24 @@ async def get_cached_model(chat_id) -> ModelInfo:
         return model_cache[chat_id]
 
 async def generators_refresh_task():
+    global model_cache
+
+    t = time() - MAX_CACHE_AGE_SEC
     print("Starting cacher")
     while True:
-        print("_before generators_lock")
+        # print("_before generators_lock")
         async with generators_lock:
             print("refreshing the chats...")
-            for chat_id in model_cache.keys():
-                refresh_generator(chat_id)
+            for chat_id in list(model_cache.keys()):
+                m = model_cache[chat_id]
+                if m.created < t:
+                    model_cache.pop(chat_id)
+                    continue
 
-        print("_after generators_lock")
+                if m.has_new_msgs:
+                    refresh_generator(chat_id)
+
+        # print("_after generators_lock")
 
         await asyncio.sleep(MODEL_REFRESH_SEC)
 
@@ -217,12 +228,18 @@ async def give_stick(message: types.message) -> None:
     await message.answer_sticker(await generate_sticker(chat_id=chat_id))
 
 
+async def allow_model_update(chat_id):
+    async with generators_lock:
+        if (model := model_cache.get(str(chat_id))):
+            model.has_new_msgs = True
+
 @dp.message_handler(content_types=ContentType.STICKER)
 async def send_stick(message: types.Message) -> None:
     chat_path = f"{dir_to_txt}{message.chat.id}_stickers.txt"
     file_id = message.sticker.file_id
     with open(chat_path, "a", encoding="utf8") as f:
         f.write(file_id + "\n")
+    await allow_model_update(message.chat.id)
 
     is_reply = message.reply_to_message
     is_reply_to_bot = is_reply.from_user.is_bot if is_reply else False
@@ -236,6 +253,7 @@ async def send_stick(message: types.Message) -> None:
 
 @dp.message_handler(content_types=ContentType.TEXT)
 async def sov(message: types.Message) -> None:
+    global model_cache
     clean_message: str = bloodbath.sanitize(message.text)
     chat_path = f"{dir_to_txt}{message.chat.id}.txt"
 
@@ -245,6 +263,7 @@ async def sov(message: types.Message) -> None:
     if bloodbath.valid(clean_message):
         with open(chat_path, "a", encoding="utf8") as f:
             f.write(message.text + "\n")
+        await allow_model_update(message.chat.id)
 
     is_reply = message.reply_to_message
     is_reply_to_bot = is_reply.from_user.is_bot if is_reply else False
