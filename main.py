@@ -171,9 +171,9 @@ async def get_time_to_anime(message, bypass=False):
             await message.answer(
                 f"До онеме сходОчки в {ANIME_ROOM} осталось {' '.join(answer)}"
             )
-    else:
-        await message.answer("Anime is no more...")
-    return is_nice_message
+        else:
+            await message.answer("Anime is no more...")
+        return is_nice_message
 
 
 @dp.message_handler(content_types=["new_chat_members"])
